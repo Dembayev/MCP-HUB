@@ -443,6 +443,7 @@ These are explicit non-decisions for v0.1. Listed here so they don't get re-liti
 3. **Live tail protocol.** `mcp-hub tail` is in scope, but its wire format (probably NDJSON-over-WS) is a separate spec.
 4. **Signed exports.** A signing layer on top of `payload_hash` (e.g. session-level signature) is deliberately out of scope. We are not building an audit system; we are building a debugger.
 5. **Compression.** `.json.zst` for large traces. Trivial to add — not required for v0.1.
+6. **`sha256-partial:` prefix wording.** Current §5.5 says the partial prefix means "action incomplete", which is awkward for semantically-void actions (lifecycle events, sandbox denials) that have no `result` by design — they aren't "incomplete", they just have no result side. The byte format is fine; v0.2 may clarify the prefix as "hash covers args only" rather than implying in-flight state.
 
 ---
 
