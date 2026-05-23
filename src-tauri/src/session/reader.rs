@@ -121,6 +121,13 @@ pub fn read_ndjson_from(reader: impl BufRead) -> AppResult<ReadOutcome> {
         AppError::Internal("session reader: file has no meta record".to_string())
     })?;
 
+    // Spec §3: `actions[]` is ordered by `seq` ascending. On-disk NDJSON line
+    // order is NOT guaranteed semantic — a writer-task may receive completions
+    // out of arrival order under concurrent in-flight requests. The reader is
+    // the canonical sorting point so all downstream consumers (Timeline, JSON
+    // export, replay) get a stable ordered view.
+    actions.sort_by_key(|a| a.seq);
+
     match end {
         Some((ended_at, stats)) => {
             session.ended_at = Some(ended_at);

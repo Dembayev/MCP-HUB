@@ -418,6 +418,36 @@ fn reader_tolerates_partial_last_line() {
 }
 
 #[test]
+fn reader_sorts_actions_by_seq_regardless_of_disk_order() {
+    // Once the writer becomes an mpsc task (step 2), completions can arrive
+    // out of order under concurrent in-flight requests, so the on-disk NDJSON
+    // line order is no longer the semantic order. Reader must surface a
+    // seq-sorted view per spec §3.
+    let session_file = canonical_session();
+    let session_meta = session_file.session.clone();
+
+    // Reverse-order the action lines on purpose.
+    let mut lines: Vec<String> = vec![serde_json::to_string(&NdjsonRecord::Meta {
+        schema_version: SCHEMA_VERSION.to_string(),
+        session: session_meta,
+    })
+    .unwrap()];
+    for a in session_file.actions.iter().rev() {
+        lines.push(
+            serde_json::to_string(&NdjsonRecord::Action { action: a.clone() }).unwrap(),
+        );
+    }
+    let bytes = format!("{}\n", lines.join("\n"));
+
+    let outcome =
+        read_ndjson_from(std::io::Cursor::new(bytes.as_bytes())).expect("reader");
+    let file = outcome.into_file();
+
+    let seqs: Vec<u64> = file.actions.iter().map(|a| a.seq).collect();
+    assert_eq!(seqs, vec![0, 1, 2], "reader must sort by seq ascending");
+}
+
+#[test]
 fn writer_per_record_fsync_still_parseable() {
     // Stress: force fsync after every record (worst case for performance,
     // best case for crash safety). Output must still be a valid session.
