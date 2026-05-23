@@ -1,0 +1,64 @@
+[package]
+name = "mcp-hub"
+version = "0.1.0"
+description = "Docker Desktop for MCP servers and AI agents"
+authors = ["MCP Hub contributors"]
+edition = "2021"
+rust-version = "1.77"
+# Two `[[bin]]` targets exist (the Tauri app and the standalone proxy
+# helper). Tauri's dev runner does `cargo run` without `--bin`, so we
+# tell Cargo which binary is the default for that path.
+default-run = "mcp-hub"
+
+[lib]
+name = "mcp_hub_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "mcp-hub"
+path = "src/main.rs"
+
+[[bin]]
+name = "mcp-hub-proxy"
+path = "src/bin/mcp_hub_proxy.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = ["full"] }
+parking_lot = "0.12"
+
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5"
+
+# Session tracing primitives (see docs/SESSION_SCHEMA.md).
+# ULID — sortable, time-prefixed action/session IDs.
+# sha2 — payload_hash over canonical-JSON.
+ulid = { version = "1", features = ["serde"] }
+sha2 = "0.10"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
