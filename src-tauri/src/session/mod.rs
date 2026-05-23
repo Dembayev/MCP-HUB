@@ -20,6 +20,7 @@
 //! a file directly. Anything that wants to inspect a past session goes
 //! through [`read_ndjson`] / [`read_json`].
 
+pub mod demo;
 pub mod hash;
 pub mod partial;
 pub mod reader;

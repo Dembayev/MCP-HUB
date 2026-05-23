@@ -10,6 +10,7 @@ import type {
 import type { LogEntry, ServerStatusChanged } from "@/types/logs";
 import type { AgentAction } from "@/types/actions";
 import type { PersistedPermission } from "@/types/permissions";
+import type { SessionFile, SessionSummary } from "@/types/session";
 
 /**
  * Typed wrapper around Tauri's `invoke`. Centralizing this gives us a single
@@ -48,6 +49,11 @@ export const api = {
   appInfo: () => call<AppInfo>("app_info"),
   getProxyConfig: (serverId: string) =>
     call<ProxyConfig>("get_proxy_config", { serverId }),
+  // Session trace commands — step 3.
+  listSessions: () => call<SessionSummary[]>("list_sessions"),
+  getSession: (id: string) => call<SessionFile>("get_session", { id }),
+  getSessionPath: (id: string) => call<string>("get_session_path", { id }),
+  seedDemoSession: () => call<string>("seed_demo_session"),
 };
 
 /** Subscribe to live `server-log` events. Returns an unlisten function. */

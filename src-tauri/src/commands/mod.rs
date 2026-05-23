@@ -6,4 +6,5 @@
 
 pub mod permissions;
 pub mod servers;
+pub mod sessions;
 pub mod system;
