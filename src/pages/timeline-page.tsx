@@ -3,7 +3,10 @@ import { Activity, FileText, Sparkles, Terminal } from "lucide-react";
 
 import { ActionRow } from "@/components/timeline/action-row";
 import { OutcomeDot } from "@/components/timeline/outcome-badge";
+import { ReplayControls } from "@/components/timeline/replay-controls";
+import { Scrubber } from "@/components/timeline/scrubber";
 import { Button } from "@/components/ui/button";
+import { useReplay } from "@/hooks/use-replay";
 import { useSessions, useSessionTrace } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
 import type { SessionFile, SessionSummary } from "@/types/session";
@@ -212,11 +215,13 @@ function TraceView({
   trace: SessionFile;
 }) {
   const actions = trace.actions;
+  const replay = useReplay(actions);
   const outcomeCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const a of actions) map.set(a.outcome, (map.get(a.outcome) ?? 0) + 1);
     return map;
   }, [actions]);
+  const hasDenials = (outcomeCounts.get("denied") ?? 0) > 0;
 
   return (
     <>
@@ -252,6 +257,27 @@ function TraceView({
         </div>
       </div>
 
+      {actions.length > 0 && (
+        <div className="border-b border-border/60 bg-card/20 px-3 py-2">
+          <Scrubber actions={actions} position={replay.position} onSeek={replay.seek} />
+          <ReplayControls
+            playing={replay.playing}
+            speed={replay.speed}
+            position={replay.position}
+            total={replay.total}
+            positionMs={replay.positionMs}
+            totalMs={replay.totalMs}
+            onToggle={replay.toggle}
+            onStepBack={replay.stepBackward}
+            onStepForward={replay.stepForward}
+            onSetSpeed={replay.setSpeed}
+            onJumpToNextDenial={replay.jumpToNextDenial}
+            onReset={replay.reset}
+            hasDenials={hasDenials}
+          />
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {actions.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
@@ -259,8 +285,13 @@ function TraceView({
           </div>
         ) : (
           <ol className="flex flex-col divide-y divide-border/30 px-3 py-2">
-            {actions.map((a) => (
-              <ActionRow key={a.id} action={a} />
+            {actions.map((a, i) => (
+              <ActionRow
+                key={a.id}
+                action={a}
+                isCurrent={i === replay.position}
+                onSelect={() => replay.seek(i)}
+              />
             ))}
           </ol>
         )}

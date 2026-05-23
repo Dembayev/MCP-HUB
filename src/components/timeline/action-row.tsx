@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 
@@ -9,29 +9,56 @@ import { OutcomeBadge, OutcomeDot } from "./outcome-badge";
 
 /**
  * Dense one-line action row, DevTools-style (NOT a CRUD table row). Clicking
- * expands the row inline to show args / result / decision / error details.
+ * expands the row inline to show args / result / decision / error details
+ * AND seeks the replay engine to this position.
  *
  * The visual hierarchy intentionally puts the outcome dot first and the
  * tool name in monospace — these are the two things you scan for when
  * skimming a long trace.
+ *
+ * `isCurrent` is the replay playhead. The current row gets a left-accent
+ * border + subtle background tint and auto-scrolls itself into view when
+ * the replay engine advances. This is the "playback follows trace" UX.
  */
-export function ActionRow({ action }: { action: Action }) {
+export function ActionRow({
+  action,
+  isCurrent = false,
+  onSelect,
+}: {
+  action: Action;
+  isCurrent?: boolean;
+  onSelect?: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const rowRef = useRef<HTMLLIElement | null>(null);
   const denied = action.outcome === "denied";
   const errored = action.outcome === "error";
 
+  // Auto-scroll the playhead row into view. `block: "nearest"` avoids
+  // jarring jumps when the row is already partially visible.
+  useEffect(() => {
+    if (isCurrent && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [isCurrent]);
+
   return (
     <li
+      ref={rowRef}
       className={cn(
-        "group rounded-md border border-transparent transition-colors",
+        "group rounded-md border-l-2 border-transparent transition-colors",
         denied && "bg-destructive/[0.04] hover:bg-destructive/[0.08]",
         errored && "bg-orange-500/[0.03] hover:bg-orange-500/[0.06]",
         !denied && !errored && "hover:bg-card/60",
+        isCurrent && "border-l-primary bg-primary/[0.06]",
       )}
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => !v);
+          onSelect?.();
+        }}
         className="flex w-full items-center gap-3 px-3 py-1.5 text-left"
       >
         <ChevronRight
