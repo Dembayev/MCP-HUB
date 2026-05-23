@@ -9,6 +9,7 @@ import type {
 } from "@/types/mcp";
 import type { LogEntry, ServerStatusChanged } from "@/types/logs";
 import type { AgentAction } from "@/types/actions";
+import type { ApprovalDecision, ApprovalRequest } from "@/types/approval";
 import type { PersistedPermission } from "@/types/permissions";
 import type { SessionFile, SessionSummary } from "@/types/session";
 
@@ -54,6 +55,10 @@ export const api = {
   getSession: (id: string) => call<SessionFile>("get_session", { id }),
   getSessionPath: (id: string) => call<string>("get_session_path", { id }),
   seedDemoSession: () => call<string>("seed_demo_session"),
+  // Runtime approval commands — step 5.
+  resolveApproval: (id: string, decision: ApprovalDecision) =>
+    call<void>("resolve_approval", { id, decision }),
+  pendingApprovalCount: () => call<number>("pending_approval_count"),
 };
 
 /** Subscribe to live `server-log` events. Returns an unlisten function. */
@@ -77,6 +82,15 @@ export function subscribeAgentActions(
   cb: (action: AgentAction) => void,
 ): Promise<UnlistenFn> {
   return listen<AgentAction>("agent-action", (event) => cb(event.payload));
+}
+
+/** Subscribe to runtime approval requests. Returns an unlisten function. */
+export function subscribeApprovalRequests(
+  cb: (request: ApprovalRequest) => void,
+): Promise<UnlistenFn> {
+  return listen<ApprovalRequest>("approval-requested", (event) =>
+    cb(event.payload),
+  );
 }
 
 /** True when running inside a Tauri window (vs. plain `vite dev` in a browser). */

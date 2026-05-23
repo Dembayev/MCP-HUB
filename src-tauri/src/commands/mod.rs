@@ -4,6 +4,7 @@
 //! validate input, delegate to services on `AppState`, and translate errors
 //! to `AppError` (which serializes to a string for the frontend).
 
+pub mod approvals;
 pub mod permissions;
 pub mod servers;
 pub mod sessions;

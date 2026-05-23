@@ -148,16 +148,16 @@ fn build_denied_write(seq: u64, anchor: DateTime<Utc>, cause: Ulid) -> Action {
         }),
         decision: Some(SandboxDecision {
             verdict: "deny".into(),
-            rule_id: "fs.deny.ssh".into(),
-            reason: "Path matches fs_deny pattern ~/.ssh".into(),
+            rule_id: "fs.write".into(),
+            reason: "User reviewed approval prompt and chose Deny".into(),
             mode: "enforce".into(),
-            prompted: false,
-            prompt_resolution: None,
+            prompted: true,
+            prompt_resolution: Some("deny".into()),
         }),
         payload_hash,
         payload_truncated: false,
         payload_size_bytes: 78,
-        tags: vec!["fs".into(), "write".into(), "denied".into()],
+        tags: vec!["fs".into(), "write".into(), "denied".into(), "prompted".into()],
     }
 }
 

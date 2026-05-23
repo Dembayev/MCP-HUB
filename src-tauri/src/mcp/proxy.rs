@@ -39,18 +39,21 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
+use ulid::Ulid;
 
-use crate::db::permissions::{self, PersistedPermission};
+use crate::commands::approvals::EVENT_APPROVAL_REQUESTED;
+use crate::db::permissions::{self, PersistedPermission, RequestedPermission};
 use crate::error::{AppError, AppResult};
 use crate::mcp::agent::{
     classify_jsonrpc, classify_sandbox_denial, ActionKind, ActionStatus, AgentAction,
 };
 use crate::mcp::logs::{LogEntry, LogStream};
+use crate::security::{risk_for_kind, ApprovalDecision, ApprovalRequest as ApprovalReqPayload};
 use crate::state::AppState;
 
 pub const EVENT_AGENT_ACTION: &str = "agent-action";
@@ -154,7 +157,10 @@ async fn handle_connection(
         json!({"id": &server_id, "status": "running"}),
     );
 
-    let granted = permissions::list_for_server(state.mcp.db(), &server_id).unwrap_or_default();
+    let granted: Arc<RwLock<Vec<PersistedPermission>>> = Arc::new(RwLock::new(
+        permissions::list_for_server(state.mcp.db(), &server_id).unwrap_or_default(),
+    ));
+    let server_name = server.name.clone();
     let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
 
     // --- stderr drain task -------------------------------------------------
@@ -183,7 +189,9 @@ async fn handle_connection(
     let pending_for_req = pending.clone();
     let app_for_req = app.clone();
     let server_id_for_req = server_id.clone();
-    let granted_clone = granted.clone();
+    let server_name_for_req = server_name.clone();
+    let granted_for_req = granted.clone();
+    let state_for_req = state.clone();
     let write_tx_for_req = write_tx.clone();
 
     let client_to_server = async move {
@@ -197,9 +205,40 @@ async fn handle_connection(
                 Some(mut action) => {
                     let rpc_id = action.request_id.clone();
 
-                    match enforce_permission(action.kind, action.target.as_deref(), &granted_clone)
-                    {
-                        Decision::Allow => {
+                    // Read the granted snapshot under a brief lock; drop the
+                    // guard before any await so we never hold a sync RwLock
+                    // across yield points.
+                    let decision = {
+                        let g = granted_for_req.read();
+                        enforce_permission(action.kind, action.target.as_deref(), &g)
+                    };
+
+                    let resolved: Result<(), DenyResult> = match decision {
+                        Decision::Allow => Ok(()),
+                        Decision::AskUser { scope } => {
+                            // Surface a Pending AgentAction so the UI lights
+                            // up immediately — the approval modal is the gate,
+                            // but the live activity view should reflect that
+                            // a request is in flight.
+                            action.status = ActionStatus::Pending;
+                            actions_for_req.push_or_update(&action);
+                            let _ = app_for_req.emit(EVENT_AGENT_ACTION, &action);
+
+                            await_user_approval(
+                                &state_for_req,
+                                &app_for_req,
+                                &granted_for_req,
+                                &server_id_for_req,
+                                &server_name_for_req,
+                                &action,
+                                scope,
+                            )
+                            .await
+                        }
+                    };
+
+                    match resolved {
+                        Ok(()) => {
                             action.status = ActionStatus::Pending;
                             actions_for_req.push_or_update(&action);
                             let _ = app_for_req.emit(EVENT_AGENT_ACTION, &action);
@@ -220,7 +259,7 @@ async fn handle_connection(
                             child_stdin.write_all(&payload).await?;
                             child_stdin.flush().await?;
                         }
-                        Decision::Deny { scope, reason } => {
+                        Err(DenyResult { scope, reason }) => {
                             action.status = ActionStatus::Denied;
                             action.denied_reason =
                                 Some(format!("{} (required scope: {})", reason, scope));
@@ -362,8 +401,21 @@ fn match_response(line: &str, pending: &PendingMap) -> Option<AgentAction> {
 // ---------------------------------------------------------------------------
 
 enum Decision {
+    /// Scope already granted — proceed without asking.
     Allow,
-    Deny { scope: &'static str, reason: String },
+    /// Scope required but not granted; surface the runtime approval modal
+    /// to the user and route based on their decision.
+    AskUser { scope: &'static str },
+}
+
+/// Post-resolution decision after any approval await. Collapses both the
+/// pre-resolved `Decision::Allow` path and the user-clicked-Allow path into
+/// `Ok(())`, and the user-clicked-Deny / channel-dropped path into
+/// `Err(DenyResult)`. This lets the proxy run a single forward / denial
+/// block regardless of which path produced the outcome.
+struct DenyResult {
+    scope: &'static str,
+    reason: String,
 }
 
 fn enforce_permission(
@@ -399,9 +451,81 @@ fn enforce_permission(
     if any_grant {
         Decision::Allow
     } else {
-        Decision::Deny {
-            scope: required,
-            reason: format!("no {} grant configured", required),
+        // Missing scope → ask the user. Pre-step-5 this was a hard Deny.
+        Decision::AskUser { scope: required }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Runtime approval flow
+// ---------------------------------------------------------------------------
+
+/// Emit an `approval-requested` event, await the user's decision, and either
+/// proceed (Allow{Once,Session}) or produce a `DenyResult` (explicit Deny or
+/// fail-safe on dropped channel).
+///
+/// On `AllowSession`, persists the granted scope to the permissions DB and
+/// refreshes the in-memory `granted` snapshot so subsequent requests in
+/// this connection skip the prompt.
+async fn await_user_approval(
+    state: &Arc<AppState>,
+    app: &AppHandle,
+    granted: &Arc<RwLock<Vec<PersistedPermission>>>,
+    server_id: &str,
+    server_name: &str,
+    action: &AgentAction,
+    scope: &'static str,
+) -> Result<(), DenyResult> {
+    let approval_id = Ulid::new().to_string();
+    let (tx, rx) = oneshot::channel::<ApprovalDecision>();
+    state.approvals.register(approval_id.clone(), tx);
+
+    let payload = ApprovalReqPayload {
+        id: approval_id,
+        server_id: server_id.to_string(),
+        server_name: server_name.to_string(),
+        tool: action.tool_name.clone(),
+        kind: action.kind,
+        target: action.target.clone(),
+        scope: scope.to_string(),
+        risk: risk_for_kind(action.kind, action.target.as_deref()),
+        requested_at: Utc::now(),
+    };
+    let _ = app.emit(EVENT_APPROVAL_REQUESTED, &payload);
+
+    match rx.await {
+        Ok(ApprovalDecision::AllowOnce) => Ok(()),
+        Ok(ApprovalDecision::AllowSession) => {
+            // Persist + refresh in-memory snapshot. Failures are logged but
+            // don't block the request — the user clicked "Always Allow", we
+            // should honor that for at least the current call.
+            let req_perm = RequestedPermission {
+                scope: scope.to_string(),
+                target: None,
+                reason: Some(format!(
+                    "User granted via runtime prompt ({})",
+                    action.tool_name
+                )),
+            };
+            if let Err(e) =
+                permissions::grant_many(state.mcp.db(), server_id, &[req_perm])
+            {
+                tracing::warn!(error = %e, "failed to persist runtime grant");
+            }
+            if let Ok(updated) =
+                permissions::list_for_server(state.mcp.db(), server_id)
+            {
+                *granted.write() = updated;
+            }
+            Ok(())
         }
+        Ok(ApprovalDecision::Deny) => Err(DenyResult {
+            scope,
+            reason: format!("User denied {} via runtime prompt", action.tool_name),
+        }),
+        Err(_) => Err(DenyResult {
+            scope,
+            reason: "Approval prompt closed without response".to_string(),
+        }),
     }
 }

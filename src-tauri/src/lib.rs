@@ -67,6 +67,8 @@ pub fn run() {
             commands::permissions::list_server_permissions,
             commands::permissions::grant_permission,
             commands::permissions::revoke_permission,
+            commands::approvals::resolve_approval,
+            commands::approvals::pending_approval_count,
             commands::sessions::list_sessions,
             commands::sessions::get_session,
             commands::sessions::get_session_path,

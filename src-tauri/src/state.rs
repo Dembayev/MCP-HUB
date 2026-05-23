@@ -9,6 +9,7 @@ use tauri::AppHandle;
 use crate::db::Database;
 use crate::error::{AppError, AppResult};
 use crate::mcp::McpManager;
+use crate::security::ApprovalRegistry;
 
 /// Container for all long-lived application services. Cloned cheaply via `Arc`.
 pub struct AppState {
@@ -18,6 +19,9 @@ pub struct AppState {
     /// Per-session NDJSON traces. One file per session, named `<ulid>.ndjson`.
     /// Populated by the proxy (step 4) and the demo-seed command.
     pub sessions_dir: PathBuf,
+    /// Pending runtime approval registry — proxy registers oneshots here,
+    /// `resolve_approval` Tauri command delivers user decisions.
+    pub approvals: Arc<ApprovalRegistry>,
     // Reserved for future use (e.g. user preferences cache).
     _settings: Mutex<()>,
 }
@@ -50,6 +54,7 @@ impl AppState {
             mcp,
             data_dir,
             sessions_dir,
+            approvals: Arc::new(ApprovalRegistry::new()),
             _settings: Mutex::new(()),
         })
     }

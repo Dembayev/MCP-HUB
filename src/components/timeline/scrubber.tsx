@@ -101,13 +101,28 @@ function Ticks({ actions }: { actions: Action[] }) {
   // strip scales with container width.
   return (
     <div className="absolute inset-x-1 inset-y-1.5 flex gap-px">
-      {actions.map((a) => (
-        <span
-          key={a.id}
-          title={`#${a.seq} ${a.tool ?? a.kind} — ${a.outcome}`}
-          className={cn("flex-1 rounded-[1px]", outcomeTickClass(a.outcome))}
-        />
-      ))}
+      {actions.map((a) => {
+        const prompted = a.decision?.prompted === true;
+        return (
+          <span
+            key={a.id}
+            title={`#${a.seq} ${a.tool ?? a.kind} — ${a.outcome}${
+              prompted ? " (user-mediated)" : ""
+            }`}
+            className={cn(
+              "relative flex-1 rounded-[1px]",
+              outcomeTickClass(a.outcome),
+            )}
+          >
+            {prompted && (
+              <span
+                aria-hidden
+                className="absolute -top-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.7)]"
+              />
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }

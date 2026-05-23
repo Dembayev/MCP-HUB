@@ -142,6 +142,11 @@ export function ActionRow({
                   <span>{action.decision.rule_id}</span>
                 </div>
                 <div className="text-foreground/70">{action.decision.reason}</div>
+                {action.decision.prompted && (
+                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-300">
+                    user decided: {action.decision.prompt_resolution ?? "no response"}
+                  </div>
+                )}
               </div>
             </DetailBlock>
           )}

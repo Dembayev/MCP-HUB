@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 
+import { ApprovalModal } from "@/components/approvals/approval-modal";
+
 import { Sidebar, type Route } from "./sidebar";
 import { Titlebar } from "./titlebar";
 
@@ -11,6 +13,10 @@ interface AppShellProps {
  * Two-pane application shell: sidebar (route switcher) + main content.
  * No router dependency — for a single-window desktop app, a tiny piece of
  * local state is enough and keeps the bundle lean.
+ *
+ * The `ApprovalModal` is mounted at the shell root so a runtime approval
+ * prompt can interrupt any page. It self-subscribes to `approval-requested`
+ * events; nothing else in the shell needs to know it exists.
  */
 export function AppShell({ render }: AppShellProps) {
   const [route, setRoute] = useState<Route>("servers");
@@ -22,6 +28,7 @@ export function AppShell({ render }: AppShellProps) {
         <Titlebar />
         <main className="min-h-0 flex-1 overflow-y-auto">{render(route)}</main>
       </div>
+      <ApprovalModal />
     </div>
   );
 }
