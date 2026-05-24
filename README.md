@@ -7,10 +7,10 @@
 > ⚠️ **Pre-alpha — building in public.** The core architecture is in place but the app is not yet installable. Star the repo to watch progress toward v0.1 alpha. Issues / bug reports are not yet useful — open a [Discussion](../../discussions) instead.
 
 <p align="center">
-  <img src="screenshots/timeline-denial.png" alt="MCP Hub Timeline showing an AI agent's denied attempt to write to ~/.ssh/config" />
+  <img src="screenshots/timeline-replay.gif" alt="MCP Hub Timeline replay: scrubber playback through an agent session ending on a user-denied write to ~/.ssh/config" />
 </p>
 <p align="center">
-  <sub>Timeline — every action your AI agents took, with sandbox decisions surfaced inline. Red glow = denied.</sub>
+  <sub><strong>See</strong> every action your AI agents take. <strong>Replay</strong> it. <strong>Approve</strong> what they're allowed to do.</sub>
 </p>
 
 MCP Hub is an open-source desktop app that turns the chaotic world of [Model Context Protocol](https://modelcontextprotocol.io/) servers into a one-click experience. Install servers from a marketplace, run them in isolated processes, review what they can access, and watch them work — all from a single window. No cloud, no telemetry, no Electron.
