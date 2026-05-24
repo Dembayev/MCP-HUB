@@ -97,6 +97,19 @@ export interface UseSessionTraceResult {
 }
 
 /**
+ * Cheap fingerprint comparison — covers every change scenario the writer
+ * task can produce (new action appended, session finalized) without
+ * paying for a deep deserialize-and-compare on every poll.
+ */
+function tracesEqual(a: SessionFile, b: SessionFile): boolean {
+  if (a.actions.length !== b.actions.length) return false;
+  if (a.session.ended_at !== b.session.ended_at) return false;
+  const lastA = a.actions[a.actions.length - 1];
+  const lastB = b.actions[b.actions.length - 1];
+  return (lastA?.id ?? null) === (lastB?.id ?? null);
+}
+
+/**
  * Loads (and polls) the full trace for one session id. Pass `null` to
  * disable — the hook short-circuits and exposes a null trace.
  */
@@ -115,7 +128,12 @@ export function useSessionTrace(id: string | null): UseSessionTraceResult {
     try {
       const file = await api.getSession(id);
       if (!mountedRef.current) return;
-      setTrace(file);
+      // Reference-stable update: only swap state when the trace actually
+      // changed (new action appended, session finalized, …). Without this,
+      // every poll produces a new object identity, which would reset every
+      // downstream consumer that depends on the actions array — most
+      // visibly useReplay, where it kept restarting playback every second.
+      setTrace((prev) => (prev && tracesEqual(prev, file) ? prev : file));
       setError(null);
     } catch (err) {
       if (!mountedRef.current) return;
