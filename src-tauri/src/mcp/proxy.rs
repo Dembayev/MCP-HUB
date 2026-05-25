@@ -58,7 +58,7 @@ use crate::security::{risk_for_kind, ApprovalDecision, ApprovalRequest as Approv
 use crate::session::{
     ActionError as SessionActionError, AppInfo as SessionAppInfo, ClientInfo as SessionClientInfo,
     PartialAction, SandboxConfig as SessionSandboxConfig, SandboxDecision as SessionSandboxDecision,
-    ServerInfo as SessionServerInfo, SessionAppender, SessionHandle, SessionMeta, Stats as SessionStats,
+    ServerInfo as SessionServerInfo, SessionHandle, SessionMeta, Stats as SessionStats,
 };
 use crate::state::AppState;
 
