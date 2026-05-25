@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and design discussions
+    url: https://github.com/Dembayev/MCP-HUB/discussions
+    about: |
+      MCP Hub is pre-alpha. Use Discussions for "how do I..." or "why
+      doesn't it..." style questions; reserve Issues for concrete bug
+      reports and feature proposals.
+  - name: Security vulnerability
+    url: https://github.com/Dembayev/MCP-HUB/security/advisories/new
+    about: |
+      Report privately via GitHub Security Advisory. Do NOT open a
+      public issue for vulnerabilities. See SECURITY.md.
